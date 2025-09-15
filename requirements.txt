@@ -3,3 +3,4 @@ ytmusicapi
 yt-dlp
 APScheduler
 gunicorn
+schedule
