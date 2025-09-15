@@ -1,12 +1,10 @@
 import os
 import json
-import time
 import logging
-import schedule
-import threading
 from flask import Flask, jsonify, request
 from ytmusicapi import YTMusic
 import yt_dlp
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Log ayarları
 logging.basicConfig(
@@ -19,7 +17,8 @@ app = Flask(__name__)
 
 # Dosya adları
 LINKS_FILE = "links.json"
-COOKIES_FILE = "cookies.txt"  # Buraya kendi cookie dosyanı koyacaksın
+ARTISTS_FILE = "artists.json"
+COOKIES_FILE = "cookies.txt"  # YouTube login çerez dosyası
 
 # YTMusic başlat
 ytmusic = YTMusic()
@@ -52,7 +51,6 @@ def fetch_artist_songs(channel_handle):
     logging.info(f"{channel_handle} için şarkılar çekiliyor...")
 
     try:
-        # Sanatçının bilgilerini getir
         artist = ytmusic.get_artist(channel_handle)
         tracks = []
 
@@ -108,28 +106,23 @@ def get_links():
     with open(LINKS_FILE, "r", encoding="utf-8") as f:
         return jsonify(json.load(f))
 
-# --- Arka planda otomatik güncelleme ---
+# --- Arka planda otomatik 3 saatte bir güncelleme ---
 
 def scheduled_task():
-    artists_file = "artists.json"
-    if not os.path.exists(artists_file):
-        logging.warning("artists.json bulunamadı, otomatik güncelleme atlandı.")
+    if not os.path.exists(ARTISTS_FILE):
+        logging.warning(f"{ARTISTS_FILE} bulunamadı, otomatik güncelleme atlandı.")
         return
 
-    with open(artists_file, "r", encoding="utf-8") as f:
+    with open(ARTISTS_FILE, "r", encoding="utf-8") as f:
         artists = json.load(f)
 
     update_links_json(artists)
 
-def run_scheduler():
-    schedule.every(3).hours.do(scheduled_task)
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
-
-# Thread başlat
-threading.Thread(target=run_scheduler, daemon=True).start()
+# APScheduler
+scheduler = BackgroundScheduler()
+scheduler.add_job(scheduled_task, 'interval', hours=3)
+scheduler.start()
 
 # Uygulama başlat
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)
